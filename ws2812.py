@@ -28,25 +28,41 @@ SOFTWARE.
 # Work in progress!!!
 
 from machine import SPI
+import uarray
 
-SPI_FCLK = const(2400000)   # 2.4MHz ~ 0.416us, then 3-bits ~ 1.25us
+#SPI_FCLK = const(2400000)   # 2.4MHz ~ 0.416us, then 3-bits ~ 1.25us
+SPI_FCLK = const(3000000)   # 3MHz ~ 0.333us, then 3-bits ~ 1.0us
 BIT_HI = const(6)  # 0b110 -> 0b001 - presentation of Logic 1 signal for WS2812
 BIT_LO = const(4)  # 0b100 -> 0b011 - presentation of Logic 0 signal for WS2812
 SHIFT  = const(3)  # 3-bits are valid
-BYTE_PER_LED    = const(9)  # 24-bit * SHIFT / 8-bit
-BYTE_PER_COLOR  = const(3)  # 9/3
+BYTE_PER_CHIP  = const(6)  # 24-bit * SHIFT / 12-bit
+WS_G = const(0)  # green @ WS2812
+WS_R = const(1)  # red @ WS2812
+WS_B = const(2)  # blue @ WS2812
 
-# GRB
+"""
+color order: G-R-B
+24 bit => 72 sub-bit = 3x2x2x2x3
+12 sub-bit * 6 spi-word = 72 sub-bit
 
+ < 0 >< 1 >< 2 >< 3 >< 4 >< 5 >< 6 >< 7 >< 8 >< 9 ><10 ><11 >
+ `````XXXXX_____`````XXXXX_____`````XXXXX_____`````XXXXX_____
+      bit 0          bit 1          bit 2          bit 3
+
+SPI with 12-bit data + 1.5 bit dummy time (revealed using a logic analyzer)
+SPI.MOSI and SPI.CLK is combined by 74LVC1G175 (D-type flip-flop). Output (Q) drives WS2812
+"""
 
 class WS2812():
     def __init__(self, spi_numb, leds):
         self.led_ct = leds
         self.led = leds * [[0,0,0]]
-        self.buf = bytearray(leds * BYTE_PER_LED)
-        self.spi = SPI(spi_numb, SPI_FCLK, firstbit=SPI.MSB, bits=8)
+        # self.buf = bytearray(leds * BYTE_PER_CHIP)
+        self.buf = uarray.array('H',list(leds*BYTE_PER_CHIP*[0]))
+        self.spi = SPI(spi_numb, SPI_FCLK, polarity=0, phase=0, firstbit=SPI.MSB, bits=12)
         self.map = None
-
+        self.spi.write(uarray.array('H',[0x0000]))
+        
     def byteToStream(self,data,offset):
         val=0
         # print("byteToStream: "+str(data)+" @ "+str(offset))
@@ -59,9 +75,14 @@ class WS2812():
             val<<=SHIFT
         val>>=SHIFT
         # print("=> "+str(val))
-        self.buf[offset+0]=(val&0xFF0000)>>16
-        self.buf[offset+1]=(val&0x00FF00)>>8
-        self.buf[offset+2]=(val&0x0000FF)
+        self.buf[offset+0]=(val&0xFFF000)>>12
+        self.buf[offset+1]=(val&0x000FFF)
+    
+    def transformation(self):
+        val=0
+        for i in range(len(self.buf)):
+            val = self.buf[i]
+            self.buf[i]=((val&0x00FF)<<8)|((val&0xFF00)>>8)            
 
     def update(self):
         tmp = 0x00
@@ -72,10 +93,11 @@ class WS2812():
             else:
                 chip = self.led[self.map[indx]]
             # print("update: " + str(chip))
-            self.byteToStream(chip[1],BYTE_PER_LED*indx)    # Green
-            self.byteToStream(chip[0],BYTE_PER_LED*indx+3)  # Red
-            self.byteToStream(chip[2],BYTE_PER_LED*indx+6)  # Blue
+            self.byteToStream(chip[1],BYTE_PER_CHIP*indx)    # Green
+            self.byteToStream(chip[0],BYTE_PER_CHIP*indx+2)  # Red
+            self.byteToStream(chip[2],BYTE_PER_CHIP*indx+4)  # Blue
         # print(self.buf)
+        self.transformation()
         self.spi.write(self.buf)
 
     def set_rgb(self, chip,r,g,b):
@@ -117,7 +139,7 @@ class WS2812():
 
 # Test application
 
-mx = WS2812(0, 5)   #5*5)
+mx = WS2812(0, 5*5)
 
 """
 mx.report()
@@ -131,7 +153,7 @@ mx.set_rgb(0, 0x0F, 0, 0)
 mx.set_rgb(1, 0, 0x0F, 0)
 mx.set_rgb(2, 0, 0, 0x0F)
 
-mx.mapping([2,1,0])
+# mx.mapping([2,1,0])
 
 mx.update()
 
@@ -142,7 +164,7 @@ mx.set_color(5, 0x000080)
 mx.set_rgb(6, 0x80, 0x80, 0)
 mx.set_rgb(7, 0x80, 0, 0x80)
 mx.set_rgb(8, 0, 0x80, 0x80)
-"--""
+"""
 
 i=0
 while i<50:
@@ -153,30 +175,9 @@ while i<50:
     mx.shift_left()
     mx.set_color(0, c)
 
-"--""
+"""
 mx.shift_right()
 mx.report()
 mx.update()
 """
 
-"""
-
-update: [112, 112, 255] -> 0x70,0x70,0xFF
-update: [128, 128, 255] -> 0x80,0x80,0xFF
-update: [15, 0, 0]
-
-
-0x9b6924	01110000	G=70
-0x9b6924	01110000	R=70
-0xdb6db6	11111111	B=FF
-
-0xd24924	10000000	G=80
-0xd24924	10000000	R=80
-0xdb6db6	11111111	B=FF
-
-0x924924	00000000	G=0
-0x924db6	00001111	R=F
-0x924924	00000000	B=0
-
-
-"""
