@@ -63,7 +63,7 @@ class WS2812():
         self.map = None
         self.spi.write(uarray.array('H',[0x0000]))
         
-    def byteToStream(self,data,offset):
+    def _byteToStream(self,data,offset):
         val=0
         # print("byteToStream: "+str(data)+" @ "+str(offset))
         for bit in range(8):
@@ -78,7 +78,7 @@ class WS2812():
         self.buf[offset+0]=(val&0xFFF000)>>12
         self.buf[offset+1]=(val&0x000FFF)
     
-    def transformation(self):
+    def _transformation(self):
         val=0
         for i in range(len(self.buf)):
             val = self.buf[i]
@@ -93,20 +93,23 @@ class WS2812():
             else:
                 chip = self.led[self.map[indx]]
             # print("update: " + str(chip))
-            self.byteToStream(chip[1],BYTE_PER_CHIP*indx)    # Green
-            self.byteToStream(chip[0],BYTE_PER_CHIP*indx+2)  # Red
-            self.byteToStream(chip[2],BYTE_PER_CHIP*indx+4)  # Blue
+            self._byteToStream(chip[1],BYTE_PER_CHIP*indx)    # Green
+            self._byteToStream(chip[0],BYTE_PER_CHIP*indx+2)  # Red
+            self._byteToStream(chip[2],BYTE_PER_CHIP*indx+4)  # Blue
         # print(self.buf)
-        self.transformation()
+        self._transformation()
         self.spi.write(self.buf)
 
-    def set_rgb(self, chip,r,g,b):
-        self.led[chip] = [r,g,b]
-        # print("LED{0} = {1}".format(chip,self.led[chip]))
+    def set_rgb(self, idx,r,g,b):
+        self.led[idx] = [r,g,b]
+        # print("LED{0} = {1}".format(idx,self.led[idx]))
 
-    def set_color(self, chip, c):
-        self.led[chip] = [(c&0xFF0000)>>16, (c&0x00FF00)>>8, (c&0x0000FF)]
-        # print("LED{0} = {1}".format(chip,self.led[chip]))
+    def set_color(self, idx, c):
+        self.led[idx] = [(c&0xFF0000)>>16, (c&0x00FF00)>>8, (c&0x0000FF)]
+        # print("LED{0} = {1}".format(idx,self.led[idx]))
+    
+    def get_rgb(self,idx):
+        return self.led[idx]
 
     def shift_left(self):
         bkp = self.led[self.led_ct-1]
@@ -147,11 +150,17 @@ print("test of 0xF0")
 mx.byteToStream(0xF0,0)
 print("test of 0x82")
 mx.byteToStream(0x82,0)
-"""
 
 mx.set_rgb(0, 0x0F, 0, 0)
 mx.set_rgb(1, 0, 0x0F, 0)
 mx.set_rgb(2, 0, 0, 0x0F)
+"""
+c=0
+for idx in range(8):
+    mx.set_rgb(idx,0,0,c)
+    c<<=1
+    c+=1
+
 
 # mx.mapping([2,1,0])
 
