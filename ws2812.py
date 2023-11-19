@@ -25,8 +25,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-# Work in progress!!!
-
 from machine import SPI
 import uarray
 
@@ -124,7 +122,7 @@ class WS2812():
         self.led[self.led_ct-1] = bkp
     
     def fill(self,color):
-        for x in range(self.led_ct-1):
+        for x in range(self.led_ct):
             self.set_color(x,color)
 
     def mapping(self,map):
@@ -132,61 +130,11 @@ class WS2812():
             self.map = None
         else:
             self.map = list(range(self.led_ct))
+            mapsize=len(map)
             for x in range(self.led_ct):
-                if len(map)>x :
-                    self.map[x]=map[x]
+                self.map[x]=map[x%mapsize]+(mapsize*(x//mapsize))
+            print(self.map)
 
     def report(self):
         print(self.led)
         print(self.map)
-
-# Test application
-
-mx = WS2812(0, 5*5)
-
-"""
-mx.report()
-print("test of 0xF0")
-mx.byteToStream(0xF0,0)
-print("test of 0x82")
-mx.byteToStream(0x82,0)
-
-mx.set_rgb(0, 0x0F, 0, 0)
-mx.set_rgb(1, 0, 0x0F, 0)
-mx.set_rgb(2, 0, 0, 0x0F)
-"""
-c=0
-for idx in range(8):
-    mx.set_rgb(idx,0,0,c)
-    c<<=1
-    c+=1
-
-
-# mx.mapping([2,1,0])
-
-mx.update()
-
-"""
-mx.set_color(3, 0x800000)
-mx.set_color(4, 0x008000)
-mx.set_color(5, 0x000080)
-mx.set_rgb(6, 0x80, 0x80, 0)
-mx.set_rgb(7, 0x80, 0, 0x80)
-mx.set_rgb(8, 0, 0x80, 0x80)
-"""
-
-i=0
-while i<50:
-    mx.report()
-    mx.update()
-    i+=1
-    c = int(input("in:"))
-    mx.shift_left()
-    mx.set_color(0, c)
-
-"""
-mx.shift_right()
-mx.report()
-mx.update()
-"""
-
